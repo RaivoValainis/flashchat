@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FlashChat</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+
+  <!-- Galvenais čata konteiners -->
+  <div class="app-container" id="chatApp" style="display: none;">
+    <!-- Augšējā josla -->
+    <header class="chat-header">
+      <div class="chat-header-title">
+        <div class="chat-logo-badge">⚡</div>
+        <div class="room-meta">
+          <h2 id="currentRoomName">Istaba</h2>
+          <p id="onlineMeta">Tiešsaistē: 1</p>
+        </div>
+      </div>
+      <div class="chat-header-actions">
+        <button class="btn" id="shareRoomBtn" title="Kopīgot saiti uz šo istabu">
+          🔗 Kopīgot
+        </button>
+        <button class="btn btn-danger" id="leaveRoomBtn" title="Iziet no istabas">
+          Iziet
+        </button>
+      </div>
+    </header>
+
+    <!-- Ziņojumu saraksts -->
+    <main class="messages-container" id="messagesContainer">
+      <div class="system-message">
+        Laipni lūgts čata istabā! Ziņas tiek sinhronizētas reāllaikā.
+      </div>
+    </main>
+
+    <!-- Rakstīšanas indikators -->
+    <div class="typing-bar" id="typingIndicator"></div>
+
+    <!-- Ievades josla -->
+    <footer class="chat-input-bar">
+      <!-- Foto pievienošanas poga (līdz 10 MB) -->
+      <label class="input-file-btn" title="Pievienot fotoattēlu (līdz 10 MB)">
+        📷
+        <input type="file" id="imageInput" accept="image/*">
+      </label>
+
+      <!-- Teksta ievade -->
+      <input 
+        type="text" 
+        id="messageInput" 
+        class="chat-input-field" 
+        placeholder="Ieraksti ziņu..." 
+        autocomplete="off"
+        maxlength="2000"
+      >
+
+      <!-- Nosūtīšanas poga -->
+      <button class="btn-send" id="sendMessageBtn" title="Nosūtīt ziņu">
+        ➤
+      </button>
+    </footer>
+  </div>
+
+  <!-- Sākuma ekrāns, ja nav norādīta istaba adresē -->
+  <div class="modal-overlay" id="homeOverlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="font-size: 2.4rem; margin-bottom: 8px;">⚡</div>
+        <h3>FlashChat</h3>
+        <p>Vienkārša un droša saziņa reāllaikā.</p>
+      </div>
+      <div id="publicRoomsList" style="margin-bottom: 16px;">
+        <p style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 8px;">Pieejamās istabas:</p>
+        <div id="roomsContainer" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+          <div style="font-size: 0.82rem; color: #6b7280; text-align: center; padding: 12px;">Nav aktīvu istabu. Lūdz administratoram nosūtīt ielūguma saiti.</div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top: 14px;">
+        <label>Vai ievadi istabas kodu/nosaukumu:</label>
+        <input type="text" id="manualRoomIdInput" class="form-input" placeholder="piem., draugi">
+      </div>
+      <button class="btn btn-primary" id="manualJoinBtn" style="width: 100%; justify-content: center; padding: 11px;">
+        Atvērt istabu
+      </button>
+    </div>
+  </div>
+
+  <!-- Pievienošanās logs saņēmējam (prasa tikai vārdu, un paroli ja istabai tāda ir) -->
+  <div class="modal-overlay" id="joinModal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="font-size: 2rem; margin-bottom: 6px;">👋</div>
+        <h3 id="joinModalTitle">Pievienoties istabai</h3>
+        <p id="joinModalSubtitle">Ievadi savu vārdu, lai uzreiz sāktu čatot.</p>
+      </div>
+      <form id="joinForm">
+        <div class="form-group">
+          <label for="usernameInput">Tavs vārds vai segvārds:</label>
+          <input 
+            type="text" 
+            id="usernameInput" 
+            class="form-input" 
+            placeholder="Piemēram, Jānis" 
+            required 
+            maxlength="25"
+            autofocus
+          >
+        </div>
+        <div class="form-group" id="passwordGroup" style="display: none;">
+          <label for="roomPasswordInput">Istabas parole:</label>
+          <input 
+            type="password" 
+            id="roomPasswordInput" 
+            class="form-input" 
+            placeholder="Ievadi istabas paroli"
+          >
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="confirmJoinBtn">
+            Pievienoties čatam
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Fotoattēlu pilnekrāna skatītājs (Lightbox) -->
+  <div class="lightbox" id="imageLightbox" style="display: none;">
+    <img id="lightboxImg" src="" alt="Pilns attēls">
+  </div>
+
+  <!-- Socket.IO skripts -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Čata klienta loģika -->
+  <script src="/js/chat.js"></script>
+</body>
+</html>

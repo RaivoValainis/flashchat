@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlashChat - Administratora Panelis</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body style="overflow-y: auto;">
+
+  <!-- Autentifikācijas logs -->
+  <div class="modal-overlay" id="adminLoginOverlay" style="display: flex;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="font-size: 2.2rem; margin-bottom: 6px;">🛡️</div>
+        <h3>FlashChat Administrators</h3>
+        <p>Ievadi administratora paroli, lai piekļūtu vadībai.</p>
+      </div>
+      <form id="adminLoginForm">
+        <div class="form-group">
+          <label for="adminPasswordInput">Admin parole:</label>
+          <input 
+            type="password" 
+            id="adminPasswordInput" 
+            class="form-input" 
+            placeholder="Ievadi paroli (raivojanis37)" 
+            required 
+            autofocus
+          >
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="loginBtn">
+            Pieslēgties
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Galvenais Admin Panelis -->
+  <div class="admin-container" id="adminPanel" style="display: none;">
+    
+    <header class="admin-header">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div class="chat-logo-badge" style="background: linear-gradient(135deg, #10b981, #059669);">🛡️</div>
+        <div>
+          <h1 style="font-size: 1.4rem; font-weight: 800; color: #fff;">FlashChat Vadības Panelis</h1>
+          <p style="font-size: 0.85rem; color: #9ca3af;">Pilna kontrole pār čata istabām un sarakstēm</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-primary" id="openCreateRoomModalBtn">
+          ➕ Jauna istaba
+        </button>
+        <button class="btn" id="openChangePassModalBtn">
+          🔑 Mainīt paroli
+        </button>
+        <button class="btn btn-danger" id="adminLogoutBtn">
+          Iziet
+        </button>
+      </div>
+    </header>
+
+    <!-- Kopsavilkums -->
+    <div style="display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 200px; background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 12px; padding: 16px;">
+        <div style="font-size: 0.8rem; color: #9ca3af;">Aktīvās istabas</div>
+        <div id="statTotalRooms" style="font-size: 1.8rem; font-weight: 800; color: #fff; margin-top: 4px;">0</div>
+      </div>
+      <div style="flex: 1; min-width: 200px; background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 12px; padding: 16px;">
+        <div style="font-size: 0.8rem; color: #9ca3af;">Kopējie lietotāji tiešsaistē</div>
+        <div id="statTotalOnline" style="font-size: 1.8rem; font-weight: 800; color: #34d399; margin-top: 4px;">0</div>
+      </div>
+      <div style="flex: 1; min-width: 200px; background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 12px; padding: 16px;">
+        <div style="font-size: 0.8rem; color: #9ca3af;">Datu drošība</div>
+        <div style="font-size: 0.95rem; font-weight: 600; color: #a5b4fc; margin-top: 8px;">✓ Saglabāts Render restartiem</div>
+      </div>
+    </div>
+
+    <!-- Istabu saraksts -->
+    <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 14px; color: #fff;">Tavas izveidotās istabas</h2>
+    <div class="admin-rooms-grid" id="adminRoomsGrid">
+      <!-- Dinamiski ielādējas istabu kartītes -->
+    </div>
+
+  </div>
+
+  <!-- MODAL: Izveidot jaunu istabu -->
+  <div class="modal-overlay" id="createRoomModal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>➕ Izveidot čata istabu</h3>
+        <p>Istaba darbosies bez laika limita, līdz to izdzēsīsi.</p>
+      </div>
+      <form id="createRoomForm">
+        <div class="form-group">
+          <label for="newRoomName">Istabas nosaukums:</label>
+          <input type="text" id="newRoomName" class="form-input" placeholder="Piem., Draugi vai Darbs" required>
+        </div>
+        <div class="form-group">
+          <label for="newRoomPassword">Parole pievienošanās brīdī (nav obligāta):</label>
+          <input type="password" id="newRoomPassword" class="form-input" placeholder="Atstāj tukšu, ja brīva pieeja">
+        </div>
+        <div class="form-group">
+          <label for="newRoomCustomId">Pielāgots saites kods (nav obligāts):</label>
+          <input type="text" id="newRoomCustomId" class="form-input" placeholder="piem., slepenais-chats">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn" onclick="document.getElementById('createRoomModal').style.display='none'">Atcelt</button>
+          <button type="submit" class="btn btn-primary">Izveidot</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Rediģēt istabu -->
+  <div class="modal-overlay" id="editRoomModal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>✏️ Rediģēt istabu</h3>
+        <p>Maini nosaukumu vai piekļuves paroli.</p>
+      </div>
+      <form id="editRoomForm">
+        <input type="hidden" id="editRoomId">
+        <div class="form-group">
+          <label for="editRoomName">Istabas nosaukums:</label>
+          <input type="text" id="editRoomName" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label for="editRoomPassword">Jauna parole (atstāj tukšu, lai nemainītu):</label>
+          <input type="password" id="editRoomPassword" class="form-input" placeholder="Ieraksti jaunu paroli">
+        </div>
+        <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="editRemovePassword" style="width: 16px; height: 16px; accent-color: var(--accent);">
+          <label for="editRemovePassword" style="margin: 0; cursor: pointer;">Noņemt paroli (padarīt istabu atvērtu)</label>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn" onclick="document.getElementById('editRoomModal').style.display='none'">Atcelt</button>
+          <button type="submit" class="btn btn-primary">Saglabāt izmaiņas</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Sarakstes vēstures skatītājs -->
+  <div class="modal-overlay" id="viewLogsModal" style="display: none;">
+    <div class="modal-card" style="max-width: 650px; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h3 id="logsRoomTitle">Istabas sarakste</h3>
+          <p id="logsRoomSubtitle">Tiešais sarakstes žurnāls</p>
+        </div>
+        <button class="btn btn-danger" id="clearLogsBtn" style="padding: 6px 12px; font-size: 0.78rem;">
+          🗑️ Iztīrīt ziņas
+        </button>
+      </div>
+      <div id="logsContainer" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.25); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; max-height: 400px; border: 1px solid rgba(255,255,255,0.06);">
+        <!-- Ziņu saraksts -->
+      </div>
+      <div class="form-actions" style="margin-top: 14px;">
+        <button type="button" class="btn" style="width: 100%; justify-content: center;" onclick="document.getElementById('viewLogsModal').style.display='none'">Aizvērt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Mainīt admin paroli -->
+  <div class="modal-overlay" id="changePassModal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>🔑 Mainīt Administratora Paroli</h3>
+        <p>Iestati jaunu paroli piekļuvei šim panelim.</p>
+      </div>
+      <form id="changePassForm">
+        <div class="form-group">
+          <label for="newAdminPassInput">Jaunā parole:</label>
+          <input type="password" id="newAdminPassInput" class="form-input" placeholder="Vismaz 4 simboli" required minlength="4">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn" onclick="document.getElementById('changePassModal').style.display='none'">Atcelt</button>
+          <button type="submit" class="btn btn-primary">Saglabāt paroli</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Klienta skripts admin panelim -->
+  <script src="/js/admin.js"></script>
+</body>
+</html>

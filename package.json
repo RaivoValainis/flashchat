@@ -1,0 +1,17 @@
+{
+  "name": "flashchat-app",
+  "version": "1.0.0",
+  "description": "FlashChat - vienkāršs, drošs čats ar slēpto administratora paneli un foto nosūtīšanu",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test-server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
