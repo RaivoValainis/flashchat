@@ -27,9 +27,9 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Noklusējuma admin parole: raivojanis37
+// Noklusējuma admin parole: raivojanis37 (var pārrakstīt arī caur ENV mainīgo)
 let appState = {
-  adminPassword: 'raivojanis37',
+  adminPassword: process.env.ADMIN_PASSWORD || 'raivojanis37',
   rooms: {}
 };
 
