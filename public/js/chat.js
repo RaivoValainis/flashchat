@@ -1,9 +1,11 @@
-// FlashChat Klienta Loģika
+// FlashChat Klienta Loģika (Cloudflare Workers + Durable Objects WebSocket + 10MB Foto)
 (() => {
-  let socket = null;
+  let ws = null;
   let currentRoom = null;
   let myUsername = '';
+  let myPassword = '';
   let typingTimeout = null;
+  let renderedMessageIds = new Set();
 
   // DOM elementi
   const chatApp = document.getElementById('chatApp');
@@ -29,7 +31,7 @@
   const manualRoomIdInput = document.getElementById('manualRoomIdInput');
   const manualJoinBtn = document.getElementById('manualJoinBtn');
 
-  // Web Audio paziņojuma skaņa (nav nepieciešami ārēji faili)
+  // Web Audio paziņojuma skaņa
   function playNotificationSound() {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -39,8 +41,8 @@
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12); // A5
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
 
       gain.gain.setValueAtTime(0.08, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
@@ -50,12 +52,9 @@
 
       osc.start();
       osc.stop(ctx.currentTime + 0.25);
-    } catch (e) {
-      // Ignorējam, ja pārlūks bloķē audio pirms lietotāja mijiedarbības
-    }
+    } catch (e) {}
   }
 
-  // Paziņojuma lodziņš (Toast)
   function showToast(message, isError = false) {
     const existing = document.querySelector('.toast-notice');
     if (existing) existing.remove();
@@ -74,7 +73,6 @@
     }, 3000);
   }
 
-  // Nolasām istabas ID no URL
   function detectRoomIdFromUrl() {
     const path = window.location.pathname;
     const roomPrefix = '/room/';
@@ -85,7 +83,6 @@
     return params.get('room') || params.get('r') || null;
   }
 
-  // Inicializācija
   const targetRoomId = detectRoomIdFromUrl();
 
   if (targetRoomId) {
@@ -94,7 +91,6 @@
     showHomeScreen();
   }
 
-  // Sagatavo pievienošanās logu saņēmējam
   async function prepareJoinModal(roomId) {
     try {
       const res = await fetch(`/api/room-check/${encodeURIComponent(roomId)}`);
@@ -119,13 +115,11 @@
       joinModal.style.display = 'flex';
       usernameInput.focus();
     } catch (err) {
-      console.error(err);
       showToast('Savienojuma kļūda pārbaudot istabu', true);
       showHomeScreen();
     }
   }
 
-  // Sākuma ekrāns, ja nav saites
   async function showHomeScreen() {
     homeOverlay.style.display = 'flex';
     joinModal.style.display = 'none';
@@ -152,9 +146,7 @@
           roomsContainer.appendChild(item);
         });
       }
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   }
 
   manualJoinBtn.addEventListener('click', () => {
@@ -164,7 +156,6 @@
     }
   });
 
-  // Apstiprināt vārdu un pievienoties
   joinForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const username = usernameInput.value.trim();
@@ -176,86 +167,85 @@
     }
 
     myUsername = username;
-    initSocketConnection(currentRoom.id, username, password);
+    myPassword = password;
+    initWebSocketConnection(currentRoom.id, username, password);
   });
 
-  // Savienojums ar Socket.IO
-  function initSocketConnection(roomId, username, password) {
-    socket = io();
-
-    socket.on('connect', () => {
-      socket.emit('join_room', { roomId, username, password });
-    });
-
-    socket.on('error_msg', (msg) => {
-      showToast(msg, true);
-    });
-
-    socket.on('joined_successfully', (data) => {
-      joinModal.style.display = 'none';
-      chatApp.style.display = 'flex';
-
-      currentRoomName.textContent = data.room.name;
-      updateOnlineUsers(data.users);
-
-      // Attēlojam saglabāto vēsturi (kas saglabāta pēc Render pamošanās)
-      messagesContainer.innerHTML = '';
-      const introMsg = document.createElement('div');
-      introMsg.className = 'system-message';
-      introMsg.textContent = `Pievienojies istabai "${data.room.name}" kā ${myUsername}`;
-      messagesContainer.appendChild(introMsg);
-
-      if (data.messages && data.messages.length > 0) {
-        data.messages.forEach(msg => appendMessage(msg));
-      }
-      scrollToBottom();
-      messageInput.focus();
-    });
-
-    socket.on('new_message', (msg) => {
-      appendMessage(msg);
-      scrollToBottom();
-      if (msg.sender !== myUsername) {
-        playNotificationSound();
-      }
-    });
-
-    socket.on('user_joined', (data) => {
-      updateOnlineUsers(data.users);
-      appendSystemNotice(`${data.username} pievienojās čatam`);
-    });
-
-    socket.on('user_left', (data) => {
-      updateOnlineUsers(data.users);
-      appendSystemNotice(`${data.username} pameta čatu`);
-    });
-
-    socket.on('user_typing', ({ username, isTyping }) => {
-      if (isTyping) {
-        typingIndicator.textContent = `${username} raksta...`;
-      } else {
-        typingIndicator.textContent = '';
-      }
-    });
-
-    socket.on('room_updated', (updated) => {
-      currentRoomName.textContent = updated.name;
-      showToast(`Istabas nosaukums atjaunināts: ${updated.name}`);
-    });
-
-    socket.on('room_deleted', (data) => {
-      alert(data.message || 'Šī istaba tika izdzēsta.');
-      window.location.href = '/';
-    });
-
-    socket.on('messages_cleared', () => {
-      messagesContainer.innerHTML = '';
-      appendSystemNotice('Administratoris iztīrīja visas sarunas.');
-    });
+  function sendWsEvent(event, data) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ event, data }));
+    }
   }
 
-  // Pievieno ziņojumu ekrānam
+  function initWebSocketConnection(roomId, username, password) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws?roomId=${encodeURIComponent(roomId)}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password || '')}`;
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        const { event, data } = msg;
+
+        if (event === 'error_msg') {
+          showToast(data, true);
+        } else if (event === 'joined_successfully') {
+          joinModal.style.display = 'none';
+          chatApp.style.display = 'flex';
+
+          currentRoomName.textContent = data.room.name;
+          updateOnlineUsers(data.users);
+
+          messagesContainer.innerHTML = '';
+          renderedMessageIds.clear();
+          const introMsg = document.createElement('div');
+          introMsg.className = 'system-message';
+          introMsg.textContent = `Pievienojies istabai "${data.room.name}" kā ${myUsername}`;
+          messagesContainer.appendChild(introMsg);
+
+          if (data.messages && data.messages.length > 0) {
+            data.messages.forEach(m => appendMessage(m));
+          }
+          scrollToBottom();
+          messageInput.focus();
+        } else if (event === 'new_message') {
+          appendMessage(data);
+          scrollToBottom();
+          if (data.sender !== myUsername) {
+            playNotificationSound();
+          }
+        } else if (event === 'user_joined') {
+          updateOnlineUsers(data.users);
+          appendSystemNotice(`${data.username} pievienojās čatam`);
+        } else if (event === 'user_left') {
+          updateOnlineUsers(data.users);
+          appendSystemNotice(`${data.username} pameta čatu`);
+        } else if (event === 'user_typing') {
+          if (data.isTyping) {
+            typingIndicator.textContent = `${data.username} raksta...`;
+          } else {
+            typingIndicator.textContent = '';
+          }
+        } else if (event === 'room_updated') {
+          currentRoomName.textContent = data.name;
+          showToast(`Istabas nosaukums atjaunināts: ${data.name}`);
+        } else if (event === 'room_deleted') {
+          alert(data.message || 'Šī istaba tika izdzēsta.');
+          window.location.href = '/';
+        } else if (event === 'messages_cleared') {
+          messagesContainer.innerHTML = '';
+          renderedMessageIds.clear();
+          appendSystemNotice('Administrators iztīrīja visas sarunas.');
+        }
+      } catch (e) {}
+    };
+  }
+
   function appendMessage(msg) {
+    if (msg.id && renderedMessageIds.has(msg.id)) return;
+    if (msg.id) renderedMessageIds.add(msg.id);
+
     const isMe = msg.sender === myUsername;
     const row = document.createElement('div');
     row.className = `message-row ${isMe ? 'me' : 'other'}`;
@@ -268,24 +258,22 @@
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
 
-    // Teksta daļa
     if (msg.text) {
       const textSpan = document.createElement('div');
       textSpan.textContent = msg.text;
       bubble.appendChild(textSpan);
     }
 
-    // Fotoattēla daļa (līdz 10 MB)
     if (msg.image) {
       const img = document.createElement('img');
       img.src = msg.image;
       img.alt = msg.fileName || 'Foto';
       img.className = 'message-image';
+      img.onload = () => scrollToBottom();
       img.onclick = () => openLightbox(msg.image);
       bubble.appendChild(img);
     }
 
-    // Laiks
     const time = document.createElement('div');
     time.className = 'message-time';
     const d = msg.timestamp ? new Date(msg.timestamp) : new Date();
@@ -313,16 +301,13 @@
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
 
-  // Ziņas nosūtīšana
   function handleSendMessage() {
     const text = messageInput.value.trim();
-    if (!text || !socket) return;
+    if (!text) return;
 
-    socket.emit('send_message', { text });
+    sendWsEvent('send_message', { text });
     messageInput.value = '';
-
-    // Notīrām rakstīšanas statusu
-    socket.emit('typing', { isTyping: false });
+    sendWsEvent('typing', { isTyping: false });
   }
 
   sendMessageBtn.addEventListener('click', handleSendMessage);
@@ -333,17 +318,15 @@
     }
   });
 
-  // Rakstīšanas indikators
   messageInput.addEventListener('input', () => {
-    if (!socket) return;
-    socket.emit('typing', { isTyping: true });
+    sendWsEvent('typing', { isTyping: true });
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
-      socket.emit('typing', { isTyping: false });
+      sendWsEvent('typing', { isTyping: false });
     }, 1500);
   });
 
-  // Fotoattēla augšupielāde (līdz 10 MB)
+  // Fotoattēla augšupielāde līdz 10 MB caur HTTP POST uz Durable Object SQLite
   imageInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -355,24 +338,37 @@
       return;
     }
 
+    showToast('Augšupielādē fotoattēlu...');
     const reader = new FileReader();
-    reader.onload = () => {
-      const base64Data = reader.result;
-      socket.emit('send_message', {
-        text: '',
-        image: base64Data,
-        fileName: file.name,
-        fileSize: file.size
-      });
+    reader.onload = async () => {
+      try {
+        const base64Data = reader.result;
+        const res = await fetch(`/api/rooms/${encodeURIComponent(currentRoom.id)}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender: myUsername,
+            text: '',
+            image: base64Data,
+            fileName: file.name,
+            fileSize: file.size
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.message) {
+          appendMessage(data.message);
+          scrollToBottom();
+        } else {
+          showToast(data.error || 'Neizdevās nosūtīt fotoattēlu', true);
+        }
+      } catch (err) {
+        showToast('Kļūda augšupielādējot fotoattēlu', true);
+      }
       imageInput.value = '';
-    };
-    reader.onerror = () => {
-      showToast('Kļūda ielasot fotoattēlu', true);
     };
     reader.readAsDataURL(file);
   });
 
-  // Lightbox
   function openLightbox(src) {
     lightboxImg.src = src;
     imageLightbox.style.display = 'flex';
@@ -383,7 +379,6 @@
     lightboxImg.src = '';
   });
 
-  // Istabas saites kopīgošana
   shareRoomBtn.addEventListener('click', () => {
     const shareUrl = `${window.location.origin}/room/${encodeURIComponent(currentRoom.id)}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
@@ -393,14 +388,12 @@
     });
   });
 
-  // Iziet no istabas
   leaveRoomBtn.addEventListener('click', () => {
     if (confirm('Vai tiešām vēlies iziet no šīs istabas?')) {
       window.location.href = '/';
     }
   });
 
-  // Palīgfunkcija HTML aizsardzībai
   function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/[&<>"']/g, (m) => ({

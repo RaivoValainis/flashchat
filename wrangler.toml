@@ -1,0 +1,17 @@
+name = "flashchat"
+main = "src/worker.js"
+compatibility_date = "2025-02-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*", "/ws", "/admin", "/admin/*", "/room/*"]
+
+[durable_objects]
+bindings = [
+  { name = "CHAT_HUB", class_name = "ChatHub" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ChatHub"]
